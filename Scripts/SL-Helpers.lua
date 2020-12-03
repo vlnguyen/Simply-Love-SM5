@@ -294,16 +294,8 @@ SetGameModePreferences = function()
 		PREFSMAN:SetPreference(key, val)
 	end
 
-	-- If we're switching to Casual mode,
-	-- we want to reduce the number of judgments,
-	-- so turn Decents and WayOffs off now.
-	if SL.Global.GameMode == "Casual" then
-		SL.Global.ActiveModifiers.TimingWindows = {true,true,true,false,false}
-
-	-- Otherwise, we want all TimingWindows enabled by default.
-	else
- 		SL.Global.ActiveModifiers.TimingWindows = {true,true,true,true,true}
-	end
+	-- disable decents/way offs by default
+	SL.Global.ActiveModifiers.TimingWindows = {true,true,true,false,false}
 
 	-- loop through human players and apply whatever mods need to be set now
 	for player in ivalues(GAMESTATE:GetHumanPlayers()) do
