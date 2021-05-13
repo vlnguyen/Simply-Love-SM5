@@ -1,6 +1,7 @@
-return Def.Actor {
-    Name="WriteSongInfo",
-    CurrentSongChangedMessageCommand=function(self)
+local t = {}
+
+t["ScreenGameplay"] = Def.Actor {
+    ModuleCommand = function(self)
         local song = GAMESTATE:GetCurrentSong()
 
         --Song Data
@@ -38,3 +39,17 @@ return Def.Actor {
         f:destroy()
     end
 }
+
+t["ScreenSelectMusic"] = Def.Actor {
+    ModuleCommand = function(self)
+        local f = RageFileUtil.CreateRageFile()
+        if f:Open("Save/SongInfo.txt", 2) then
+            f:Write("SONG: --- | ARTIST: ---  | PACK: --- | LENGTH: --- | DIFF: --- | STEPS: --- | ")
+        else
+            -- do nothing
+        end
+        f:destroy()
+    end
+}
+
+return t
