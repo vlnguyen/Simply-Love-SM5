@@ -3,8 +3,14 @@
 ![Arrow Logo](https://i.imgur.com/oZmxyGo.png)
 
 
-# About
-Maintaining my own fork of [Simply-Love/Simply-Love-SM5](https://github.com/Simply-Love/Simply-Love-SM5) that contains theme changes that I personally use. The primary change is outputting song info to a text file for use as a song ticker through an OBS text source, but I may look into other minor theme changes.
+## About
+
+Simply Love is a StepMania 5 theme for the post-ITG community.
+
+It features a clean and simple design, offers numerous data-driven features not implemented by the StepMania 5 engine, and allows the current generation of ITG fans to breathe new life into the game they've known for over a decade.
+
+Simply Love was originally designed and implemented for a previous version of StepMania (SM3.95) by hurtpiggypig.  For more information on that version of Simply Love, check here:
+https://www.youtube.com/watch?v=OtcWy5m6-CQ
 
 
 ## Supported Versions of StepMania
@@ -40,8 +46,6 @@ You can download the current Simply Love release at the [Latest Release](https:/
 
 Full install instructions are in the [Installing Simply Love](./Other/Documentation/InstallingSimplyLove-README.md) README.
 
-<<<<<<< HEAD
-=======
 
 ## Language Support
 
@@ -138,4 +142,3 @@ https://www.youtube.com/watch?v=sEWj2_BNG_0
   It streamlines the setup process for those who have arcade hardware and
   want to start playing as quickly as possible.
 </p>
->>>>>>> 92d7f44e04b198ddf5b00a1fd3f1dc747daed198
