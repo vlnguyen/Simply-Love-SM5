@@ -89,10 +89,18 @@ else
 
 end
 
--- "ITG" aligned to right of screen
+-- "ITG" (or lobby code) aligned to right of screen
+local function GetGameModeDisplayText()
+	local handler = GetOnlineHandlerInstance()
+	if handler and handler.lobbyCode then
+		return handler.lobbyCode
+	end
+	return THEME:GetString("ScreenSelectPlayMode", SL.Global.GameMode)
+end
+
 af[#af+1] = LoadFont("Common Header")..{
 	Name="GameModeText",
-	Text=THEME:GetString("ScreenSelectPlayMode", SL.Global.GameMode),
+	Text=GetGameModeDisplayText(),
 	InitCommand=function(self)
 		self:diffusealpha(0):halign(1):y(15)
 		self:zoom( SL_WideScale(0.5, 0.6) )
@@ -108,8 +116,14 @@ af[#af+1] = LoadFont("Common Header")..{
 		self:sleep(0.1):decelerate(0.33):diffusealpha(1)
 	end,
 	SLGameModeChangedMessageCommand=function(self)
-		self:settext(THEME:GetString("ScreenSelectPlayMode", SL.Global.GameMode))
-	end
+		self:settext(GetGameModeDisplayText())
+	end,
+	OnlineLobbyStateMessageCommand=function(self)
+		self:settext(GetGameModeDisplayText())
+	end,
+	DisconnectOnlineMessageCommand=function(self)
+		self:settext(GetGameModeDisplayText())
+	end,
 }
 
 -- P1 pad

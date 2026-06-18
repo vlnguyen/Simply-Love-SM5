@@ -35,7 +35,7 @@ local knownDisconnectScreens = {
 }
 
 -- TESTING Variables
-local host = "syncservice.groovestats.com"
+local host = "localhost"
 local port = 1337
 
 -- This input handler is used to lock input while we're waiting on the server to tell us to proceed.
@@ -413,6 +413,7 @@ local HandleResponse = function(response, actor)
 
   if event == "lobbyState" then
     actor.inLobby = true
+    actor.lobbyCode = data and data.code or nil
     DisplayLobbyState(data, actor)
     MESSAGEMAN:Broadcast("OnlineLobbyState", data or {})
   elseif event == "lobbySearched" then
@@ -452,6 +453,7 @@ CreateOnlineHandler = function()
         self.connected = false
         self.inLobby = false
         self.errorMsg = nil
+        self.lobbyCode = nil
       end,
       OffCommand=function(self)
         onlineHandlerShuttingDown = true
@@ -496,6 +498,7 @@ CreateOnlineHandler = function()
                 MESSAGEMAN:Broadcast("DisconnectOnline")
                 self:GetChild("Display"):GetChild("Text"):settext("")
                 self:GetChild("Display"):visible(false)
+                self.lobbyCode = nil
               elseif msgType == "Error" then
                 self.inLobby = false
                 self.errorMsg = msg.reason
