@@ -50,7 +50,7 @@ local ScheduleLobbyStateUpdate = function(actor)
 end
 
 -- TESTING Variables
-local host = "syncservice.groovestats.com"
+local host = "localhost"
 local port = 1337
 
 -- This input handler is used to lock input while we're waiting on the server to tell us to proceed.
@@ -439,6 +439,7 @@ local HandleResponse = function(response, actor)
     actor.inLobby = true
     actor.latestLobbyState = data
     actor.lobbyStateNeedsDisplaying = true
+    actor.lobbyCode = data and data.code or nil
     ScheduleLobbyStateUpdate(actor)
     MESSAGEMAN:Broadcast("OnlineLobbyState", data or {})
   elseif event == "lobbySearched" then
@@ -481,6 +482,7 @@ CreateOnlineHandler = function()
         self.lobbyStateNeedsDisplaying = false
         self.lobbyStateThrottleActive = false
         self.latestLobbyState = nil
+        self.lobbyCode = nil
       end,
       OffCommand=function(self)
         onlineHandlerShuttingDown = true
@@ -528,6 +530,7 @@ CreateOnlineHandler = function()
                 MESSAGEMAN:Broadcast("DisconnectOnline")
                 self:GetChild("Display"):GetChild("Text"):settext("")
                 self:GetChild("Display"):visible(false)
+                self.lobbyCode = nil
               elseif msgType == "Error" then
                 self.inLobby = false
                 self.errorMsg = msg.reason
