@@ -40,4 +40,6 @@ af.OptionRowChangedMessageCommand=function(self, params)
 
 end
 
+af[#af+1] = LoadActor(THEME:GetPathB("", "_modules/RequireLobby.lua"))
+
 return af
