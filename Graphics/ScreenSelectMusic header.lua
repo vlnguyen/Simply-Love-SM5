@@ -89,7 +89,7 @@ else
 
 end
 
--- "ITG" aligned to right of screen
+-- "ITG" (or lobby code) aligned to right of screen
 af[#af+1] = LoadFont("Common Header")..{
 	Name="GameModeText",
 	Text=GetGameModeDisplayText(),
