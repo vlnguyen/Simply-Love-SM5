@@ -90,14 +90,6 @@ else
 end
 
 -- "ITG" (or lobby code) aligned to right of screen
-local function GetGameModeDisplayText()
-	local handler = GetOnlineHandlerInstance()
-	if handler and handler.lobbyCode then
-		return handler.lobbyCode
-	end
-	return THEME:GetString("ScreenSelectPlayMode", SL.Global.GameMode)
-end
-
 af[#af+1] = LoadFont("Common Header")..{
 	Name="GameModeText",
 	Text=GetGameModeDisplayText(),

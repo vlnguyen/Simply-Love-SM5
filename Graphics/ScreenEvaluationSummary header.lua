@@ -4,7 +4,7 @@ af[#af+1] = LoadActor( THEME:GetPathG("", "_header.lua") )
 
 af[#af+1] = LoadFont("Common Header")..{
 	Name="GameModeText",
-	Text=THEME:GetString("ScreenSelectPlayMode", SL.Global.GameMode),
+	Text=GetGameModeDisplayText(),
 	InitCommand=function(self)
 		self:diffusealpha(0):zoom( WideScale(0.5,0.6)):halign(1):y(15)
 

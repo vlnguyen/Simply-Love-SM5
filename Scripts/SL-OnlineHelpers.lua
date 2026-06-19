@@ -422,9 +422,11 @@ local HandleResponse = function(response, actor)
     })
   elseif event == "lobbyLeft" then
     actor.inLobby = false
+    actor.lobbyCode = nil
     MESSAGEMAN:Broadcast("OnlineLobbyLeft", data or {})
   elseif event == "clientDisconnected" then
     actor.inLobby = false
+    actor.lobbyCode = nil
     MESSAGEMAN:Broadcast("OnlineClientDisconnected", data or {})
   elseif event == "responseStatus" then
     MESSAGEMAN:Broadcast("OnlineResponseStatus", data or {})
@@ -440,6 +442,14 @@ local onlineHandlerShuttingDown = false
 
 GetOnlineHandlerInstance = function()
   return onlineHandlerInstance
+end
+
+GetGameModeDisplayText = function()
+  local handler = GetOnlineHandlerInstance()
+  if handler and handler.lobbyCode then
+    return handler.lobbyCode
+  end
+  return THEME:GetString("ScreenSelectPlayMode", SL.Global.GameMode)
 end
 
 CreateOnlineHandler = function() 
@@ -463,6 +473,7 @@ CreateOnlineHandler = function()
         end
         self.connected = false
         self.inLobby = false
+        self.lobbyCode = nil
         self.errorMsg = nil
         local display = self:GetChild("Display")
         if display then
@@ -488,6 +499,7 @@ CreateOnlineHandler = function()
               if msgType == "Open" then
                 self.connected = true
                 self.inLobby = false
+                self.lobbyCode = nil
                 self.errorMsg = nil
                 self:GetChild("Display"):visible(true)
               elseif msgType == "Message" then
@@ -501,6 +513,7 @@ CreateOnlineHandler = function()
                 self.lobbyCode = nil
               elseif msgType == "Error" then
                 self.inLobby = false
+                self.lobbyCode = nil
                 self.errorMsg = msg.reason
                 self:GetChild("Display"):GetChild("Text"):settext("")
                 self:GetChild("Display"):visible(false)
@@ -608,7 +621,8 @@ CreateOnlineHandler = function()
       end,
       JoinLobbyMessageCommand=function(self, params)
         if self.connected and self.socket ~= nil then
-        self.inLobby = false
+          self.inLobby = false
+          self.lobbyCode = nil
           local data = GetMachineState()
           data.code = params.code and params.code
           data.password = params.password and params.password or ""
@@ -618,7 +632,8 @@ CreateOnlineHandler = function()
       end,
       CreateLobbyMessageCommand=function(self, params)
         if self.connected and self.socket ~= nil then
-        self.inLobby = false
+          self.inLobby = false
+          self.lobbyCode = nil
           local data = GetMachineState()
           data.password = params.password and params.password or ""
           local request = CreateRequest("createLobby", data)
@@ -648,6 +663,7 @@ CreateOnlineHandler = function()
         end
         self.connected = false
         self.inLobby = false
+        self.lobbyCode = nil
         self.socket = nil
         self:GetChild("Display"):GetChild("Text"):settext("")
         self:GetChild("Display"):visible(false)
