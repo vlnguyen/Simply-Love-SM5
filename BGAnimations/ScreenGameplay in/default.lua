@@ -24,7 +24,8 @@ elseif not PREFSMAN:GetPreference("EventMode") then
 	text = THEME:GetString("Stage", "Stage") .. " " .. tostring(SL.Global.Stages.PlayedThisGame + 1)
 
 else
-	text = THEME:GetString("Stage", "Event")
+	local handler = GetOnlineHandlerInstance()
+	text = (handler and handler.lobbyCode) or THEME:GetString("Stage", "Event")
 end
 
 InitializeMeasureCounterAndModsLevel(SongNumberInCourse)
