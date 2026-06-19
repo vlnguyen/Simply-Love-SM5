@@ -77,9 +77,6 @@ local af = Def.ActorFrame{
 	LoadActor("./Banner.lua"),
 
 	-- ---------------------------------------------------
-	-- lobby warning bar: shown when not in a lobby
-	LoadActor(THEME:GetPathB("", "_modules/RequireLobby.lua")),
-
 	-- finally, load the overlay used for sorting the MusicWheel (and more), hidden by default
 	LoadActor("./SortMenu/default.lua"),
 	-- a Test Input overlay can (maybe) be accessed from the SortMenu

@@ -449,9 +449,4 @@ for player in ivalues(GAMESTATE:GetHumanPlayers()) do
 	}
 end
 
-t[#t+1] = Def.ActorFrame{
-	InitCommand=function(self) self:x(-_screen.cx) end,
-	LoadActor(THEME:GetPathB("", "_modules/RequireLobby.lua")),
-}
-
 return t

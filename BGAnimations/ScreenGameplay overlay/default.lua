@@ -46,6 +46,4 @@ for player in ivalues( GAMESTATE:GetHumanPlayers() ) do
 	af[#af+1] = LoadActor("./PerColumnJudgmentTracking.lua", player)
 end
 
-af[#af+1] = LoadActor(THEME:GetPathB("", "_modules/RequireLobby.lua"))
-
 return af
