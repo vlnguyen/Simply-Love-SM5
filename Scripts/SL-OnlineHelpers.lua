@@ -34,6 +34,20 @@ local knownDisconnectScreens = {
   ["ScreenOptionsService"] = true,
 }
 
+-- How long to wait before displaying the state update.
+-- Since many updates may come together in a short time, we don't need to
+-- display them all immediately. Instead, we can wait a short time and then
+-- display the latest state update.
+local LOBBY_UPDATE_DELAY = 0.1
+
+local ScheduleLobbyStateUpdate = function(actor)
+  if actor.lobbyStateThrottleActive then
+    return
+  end
+  actor.lobbyStateThrottleActive = true
+  actor:sleep(LOBBY_UPDATE_DELAY):queuecommand("ProcessPendingLobbyState")
+end
+
 -- TESTING Variables
 local host = "localhost"
 local port = 1337
@@ -118,13 +132,22 @@ local GetJudgmentCounts = function(player)
   return judgmentCounts
 end
 
-local GetMachineState = function()
+local GetMachineState = function(params)
   -- NOTE(teejusb): Keep in mind that SCREENMAN:GetTopScreen() might return nil since we might be
   -- transitioning screens when we receive any messages from the server.
+
+  if params == nil then
+    params = {}
+  end
 
   local screen = SCREENMAN:GetTopScreen()
   -- Use a "NoScreen" fallback in case we're transitioning screens.
   local screenName = screen and screen:GetName() or "NoScreen"
+
+  -- If the caller provided a screenName, use that instead of the current screen.
+  if params.screenName ~= nil then
+    screenName = params.screenName
+  end
 
   local players = {}
   for player in ivalues(GAMESTATE:GetEnabledPlayers()) do
@@ -414,7 +437,9 @@ local HandleResponse = function(response, actor)
   if event == "lobbyState" then
     actor.inLobby = true
     actor.lobbyCode = data and data.code or nil
-    DisplayLobbyState(data, actor)
+    actor.latestLobbyState = data
+    actor.lobbyStateNeedsDisplaying = true
+    ScheduleLobbyStateUpdate(actor)
     MESSAGEMAN:Broadcast("OnlineLobbyState", data or {})
   elseif event == "lobbySearched" then
     MESSAGEMAN:Broadcast("LobbySearched", {
@@ -464,6 +489,9 @@ CreateOnlineHandler = function()
         self.inLobby = false
         self.errorMsg = nil
         self.lobbyCode = nil
+        self.lobbyStateNeedsDisplaying = false
+        self.lobbyStateThrottleActive = false
+        self.latestLobbyState = nil
       end,
       OffCommand=function(self)
         onlineHandlerShuttingDown = true
@@ -475,6 +503,9 @@ CreateOnlineHandler = function()
         self.inLobby = false
         self.lobbyCode = nil
         self.errorMsg = nil
+        self.lobbyStateNeedsDisplaying = false
+        self.lobbyStateThrottleActive = false
+        self.latestLobbyState = nil
         local display = self:GetChild("Display")
         if display then
           display:GetChild("Text"):settext("")
@@ -522,10 +553,17 @@ CreateOnlineHandler = function()
           }
         end
       end,
-      UpdateOnlineStateMessageCommand=function(self)
+      UpdateOnlineStateMessageCommand=function(self, params)
         if self.connected and self.socket ~= nil and self.inLobby then
-          local request = CreateRequest("updateMachine", GetMachineState())
+          local request = CreateRequest("updateMachine", GetMachineState(params))
           self.socket:Send(request)
+        end
+      end,
+      ProcessPendingLobbyStateCommand=function(self)
+        self.lobbyStateThrottleActive = false
+        if self.lobbyStateNeedsDisplaying then
+          self.lobbyStateNeedsDisplaying = false
+          DisplayLobbyState(self.latestLobbyState, self)
         end
       end,
       ScreenChangedMessageCommand=function(self)
@@ -552,25 +590,24 @@ CreateOnlineHandler = function()
             end
           end
 
-    if autoReadyScreens[screenName] then
-      for player in ivalues(GAMESTATE:GetEnabledPlayers()) do
-        local pn = ToEnumShortString(player)
-        readyState[pn] = true
-      end
-    end
+          if autoReadyScreens[screenName] then
+            for player in ivalues(GAMESTATE:GetEnabledPlayers()) do
+              local pn = ToEnumShortString(player)
+              readyState[pn] = true
+            end
+          end
 
           if screenName == "ScreenGameplay" then
-      for player in ivalues(GAMESTATE:GetEnabledPlayers()) do
-        local pn = ToEnumShortString(player)
-        readyState[pn] = false
-      end
+            for player in ivalues(GAMESTATE:GetEnabledPlayers()) do
+              local pn = ToEnumShortString(player)
+              readyState[pn] = false
+            end
             -- Input callbacks get cleared out when we transition screens, so we don't need to worry about explicitly removing it.
             SCREENMAN:GetTopScreen():AddInputCallback(InputHandler)
             SCREENMAN:GetTopScreen():PauseGame(true)
-    elseif isWaiting then
-      SCREENMAN:GetTopScreen():AddInputCallback(InputHandler)
-
-    end
+          elseif isWaiting then
+            SCREENMAN:GetTopScreen():AddInputCallback(InputHandler)
+          end
 
           MESSAGEMAN:Broadcast("UpdateMachineState")
         end
