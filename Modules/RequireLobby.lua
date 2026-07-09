@@ -5,19 +5,23 @@ local function isInLobby()
 	return handler and handler.inLobby and handler.lobbyCode
 end
 
+local function shouldShowBanner()
+	return ThemePrefs.Get("RequireLobbies") and not isInLobby()
+end
+
 local function makeActor()
 	return Def.ActorFrame{
 		ModuleCommand=function(self)
-			self:visible(not isInLobby())
+			self:visible(shouldShowBanner())
 		end,
 		OnlineLobbyStateMessageCommand=function(self)
-			self:visible(not isInLobby())
+			self:visible(shouldShowBanner())
 		end,
 		OnlineLobbyLeftMessageCommand=function(self)
-			self:visible(true)
+			self:visible(shouldShowBanner())
 		end,
 		DisconnectOnlineMessageCommand=function(self)
-			self:visible(true)
+			self:visible(shouldShowBanner())
 		end,
 
 		Def.Quad{
