@@ -535,7 +535,6 @@ CreateOnlineHandler = function()
                 self.inLobby = false
                 self.lobbyCode = nil
                 self.errorMsg = nil
-                self:GetChild("Display"):visible(true)
               elseif msgType == "Message" then
                 local response = JsonDecode(msg.data)
                 HandleResponse(response, self)
