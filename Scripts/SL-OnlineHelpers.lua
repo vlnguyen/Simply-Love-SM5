@@ -35,6 +35,13 @@ local knownDisconnectScreens = {
   ["ScreenOptionsService"] = true,
 }
 
+-- The overlay never shows on any of the three Player Options screens.
+local noOverlayScreens = {
+  ["ScreenPlayerOptions"] = true,
+  ["ScreenPlayerOptions2"] = true,
+  ["ScreenPlayerOptions3"] = true,
+}
+
 -- How long to wait before displaying the state update.
 -- Since many updates may come together in a short time, we don't need to
 -- display them all immediately. Instead, we can wait a short time and then
@@ -352,33 +359,65 @@ local DisplayLobbyState = function(data, actor)
       end
     end
   end
-  for _, player in ipairs(updatedData.players) do
+
+  -- If we're in versus mode and the only two players in the lobby are our
+  -- own two local sides (i.e. nobody else from another machine has joined),
+  -- hide the overlay entirely -- there's nothing another machine needs to
+  -- sync with us on. As soon as a third player (from another machine) joins,
+  -- the normal display logic below takes back over.
+  local stylename = GAMESTATE:GetCurrentStyle():GetName()
+  local isSoloVersus = stylename == "versus" and #updatedData.players == 2
+  -- None of the Player Options screens show the overlay.
+  local hideOverlay = noOverlayScreens[screenName] or false
+  if isSoloVersus then
+    if screenName == "ScreenSelectMusic" or screenName == "ScreenEvaluationStage" then
+      hideOverlay = true
+    elseif screenName == Branch.GameplayScreen() then
+      -- Only hide once gameplay has actually begun (i.e. we're done waiting
+      -- to sync/ready up); keep showing the ready-up prompt until then.
+      hideOverlay = not isWaiting
+    end
+  end
+
+  for i, player in ipairs(updatedData.players) do
     local displayedScreen = player.screenName ~= "NoScreen" and player.screenName:gsub("Screen", "") or "Transitioning"
     local readyText = ""
     if screenName == Branch.GameplayScreen() and not updatedData.aux.allPlayersReady then
       readyText =" ["..(player.ready and "✔" or "❌").."]"
     end
 
+    -- Number the players on ScreenEvaluationStage, and on ScreenGameplay once
+    -- the notes have actually started moving (i.e. we're no longer waiting
+    -- to sync/ready up).
+    local showNumbering = screenName == "ScreenEvaluationStage"
+      or (screenName == Branch.GameplayScreen() and not isWaiting)
+
     -- Only display the screen name of the players that are on a different
     -- screen than we are.
-    local playerAndScreen = player.profileName..readyText
+    local playerAndScreen = (showNumbering and (i..'. ') or "")..player.profileName..readyText
+
+    -- Don't show the EX score for a player still on the gameplay screen
+    -- waiting to sync/ready up -- it'd just be showing the 0.00% initial value.
+    local stillWaitingForGameplayToStart = isWaiting and player.screenName == Branch.GameplayScreen()
+
+    if screenName ~= "ScreenSelectMusic" and not stillWaitingForGameplayToStart then
+      for scoreScreen in ivalues(scoreScreens) do
+        if player.screenName == scoreScreen then
+          -- Display the EX score in parentheses next to the player name.
+          local exScore = (player.exScore ~= nil and player.exScore) or 0
+          local exScoreStr = string.format("%.2f", exScore).."%"
+
+          playerAndScreen = playerAndScreen.." ("..exScoreStr..")"
+          break
+        end
+      end
+    end
+
     if screenName ~= player.screenName then
       playerAndScreen = playerAndScreen.." - in "..displayedScreen
     end
 
     lines[#lines+1] = playerAndScreen
-    if screenName ~= "ScreenSelectMusic" then
-      for scoreScreen in ivalues(scoreScreens) do
-        if player.screenName == scoreScreen then
-          -- Display the EX score only.
-          local exScore = (player.exScore ~= nil and player.exScore) or 0
-          local exScoreStr = string.format("%.2f", exScore).."%"
-
-          lines[#lines+1] = "    "..exScoreStr.." EX"
-          break
-        end
-      end
-    end
   end
 
   if data.songInfo ~= nil then
@@ -424,7 +463,7 @@ local DisplayLobbyState = function(data, actor)
 
   -- This gets cleared out by the server when every player has arrived at the song selection screen.
   songSelected = (data.songInfo ~= nil)
-  actor:GetChild("Display"):playcommand("UpdateText", {text=table.concat(lines, "\n")})
+  actor:GetChild("Display"):playcommand("UpdateText", {text=table.concat(lines, "\n"), hideOverlay=hideOverlay})
 end
 
 local HandleResponse = function(response, actor)
@@ -576,8 +615,9 @@ CreateOnlineHandler = function()
             return
           end
 
-          -- We're connected and in a lobby, so show the panel.
-          self:GetChild("Display"):visible(true)
+          -- We're connected and in a lobby, so show the panel (except on
+          -- the Player Options screens, which never show it).
+          self:GetChild("Display"):visible(not noOverlayScreens[screenName])
 
           -- Lock input while syncing arrival on key screens.
           if syncLockScreens[screenName] then
@@ -715,10 +755,13 @@ CreateOnlineHandler = function()
           self:xy(LEFT, _screen.cy)
         end,
         UpdateTextCommand=function(self, params)
+          self:visible(not params.hideOverlay)
+
           local screen = SCREENMAN:GetTopScreen()
           local screenName = screen and screen:GetName() or "NoScreen"
 
           local bg = self:GetChild("Background")
+          bg:visible(true)
           local width = 200
           local height = SCREEN_HEIGHT
 
@@ -745,23 +788,128 @@ CreateOnlineHandler = function()
 
             self:xy(bannerCenterX, bannerCenterY)
             bg:zoomto(width, height)
-          elseif screenName == "ScreenEvaluationStage" or screenName == Branch.GameplayScreen() then
+          elseif screenName == "ScreenEvaluationStage" then
+            -- Cover the banner entirely: match its position and dimensions
+            -- exactly (see "ScreenEvaluation common/Shared/TitleAndBanner.lua").
+            -- Unlike the ScreenSelectMusic banner, this one isn't
+            -- widescreen-dependent, but its y-position does shift for Casual mode.
+            local bannerWidth = 418
+            local bannerHeight = 164
+            local bannerZoom = 0.7
+            local yOffset = SL.Global.GameMode == "Casual" and 50 or 46
+            local bannerCenterX = _screen.cx
+            local bannerCenterY = yOffset + 66
+
+            width = bannerWidth * bannerZoom
+            height = bannerHeight * bannerZoom
+
+            self:xy(bannerCenterX, bannerCenterY)
+            bg:zoomto(width, height)
+          elseif screenName == Branch.GameplayScreen() then
             local p1Joined = GAMESTATE:IsSideJoined("PlayerNumber_P1")
             local p2Joined = GAMESTATE:IsSideJoined("PlayerNumber_P2")
 
+            local IsUltraWide = (GetScreenAspectRatio() > 21/9)
+            local stylename = GAMESTATE:GetCurrentStyle():GetName()
+            local centerY = _screen.cy
+            local overrideCenterX = nil
+
+            if stylename == "single" or stylename == "versus" then
+              bg:visible(false)
+            end
+
+            if stylename == "versus" and not IsUltraWide then
+              -- Versus mode (at standard aspect ratios) has no side pane at
+              -- all in StepStatistics/default.lua -- the judgment counters
+              -- just sit in a narrow column next to each notefield. Use a
+              -- narrow fixed width to match that footprint instead.
+              width = 150
+
+              -- Move our top edge down to meet the top edge of the small
+              -- banner shown here (see "ScreenGameplay underlay/Shared/VersusStepStatistics.lua"),
+              -- keeping our bottom edge where it was.
+              local versusBannerHeight = 164 * 0.3
+              local versusBannerTop = (_screen.cy + 70) - versusBannerHeight / 2
+
+              height = SCREEN_HEIGHT - versusBannerTop
+              centerY = versusBannerTop + height / 2
+            else
+              -- Match the width allotted to the judgment counters' side pane
+              -- (see "ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua").
+              -- The notefield is never centered in this setup, so we don't need
+              -- to handle that branch of default.lua's sidepane_width logic.
+              local enabledPlayer = GAMESTATE:GetEnabledPlayers()[1]
+
+              width = _screen.w / 2
+              if IsUltraWide and #GAMESTATE:GetHumanPlayers() > 1 then
+                width = _screen.w / 5
+              end
+
+              if stylename == "single" then
+                -- Align our bottom edge with the top edge of the Step
+                -- Statistics density graph (see "ScreenGameplay underlay/
+                -- PerPlayer/StepStatistics/DensityGraph.lua"), and our top
+                -- edge with the bottom edge of the Holds/Mines/Rolls counts
+                -- (see "ScreenGameplay underlay/PerPlayer/StepStatistics/HoldsMinesRolls.lua").
+                -- HoldsMinesRolls has no explicit height, so we approximate
+                -- its bottom using its 3 rows of row_height=28, starting at
+                -- y=-140 from the StepStatsPane's origin (_screen.cy + header_height).
+                local headerHeight = 80
+                local densityGraphTop = _screen.cy + headerHeight + 55
+                local holdsMinesRollsBottom = (_screen.cy + headerHeight) - 140 + (3 * 28)
+
+                -- Peak NPS text (also in DensityGraph.lua) sits just above the
+                -- density graph's own top edge. It has no fixed height, so we
+                -- approximate a single line at zoom(0.9) using Common Normal's
+                -- underlying font metrics (Top=4, Baseline=19 -> ~14px tall),
+                -- giving roughly 1.5*textHeight+2 of extra clearance to pull
+                -- our bottom edge up by.
+                local peakNPSClearance = 23
+
+                height = (densityGraphTop - peakNPSClearance) - holdsMinesRollsBottom
+                centerY = holdsMinesRollsBottom + height / 2
+
+                -- Align both our inner and outer edges with the inner and
+                -- outer edges of the Step Statistics banner (see
+                -- "ScreenGameplay underlay/PerPlayer/StepStatistics/Banner.lua"),
+                -- rather than anchoring to the screen edge or notefield.
+                -- The notefield is never centered in this setup, so
+                -- default.lua's sidepane_pos_x always uses its fixed-fraction
+                -- fallback, Banner.lua's offset is always 70 (not 72), and
+                -- "BannerAndData"'s extra zoom is never applied (stays at 1).
+                local isP1 = enabledPlayer == PLAYER_1
+                local sidepanePosX = _screen.w * (isP1 and 0.75 or 0.25)
+                local bannerOffset = 70
+
+                local bannerCenterX = sidepanePosX + (isP1 and bannerOffset or -bannerOffset)
+                local bannerWidth = 418 * 0.4
+
+                width = bannerWidth
+                overrideCenterX = bannerCenterX
+              end
+            end
+
+            local left = width / 2
+            local right = SCREEN_WIDTH - width / 2
+
+            if overrideCenterX then
+              left = overrideCenterX
+              right = overrideCenterX
+            end
+
             if p1Joined and p2Joined then
-              self:xy(CENTER, _screen.cy)
+              self:xy(CENTER, centerY)
               bg:zoomto(width, height)
             elseif p1Joined then
-              self:xy(RIGHT, _screen.cy)
+              self:xy(right, centerY)
               bg:zoomto(width, height)
             elseif p2Joined then
-              self:xy(LEFT, _screen.cy)
+              self:xy(left, centerY)
               bg:zoomto(width, height)
             end
           end
 
-          self:GetChild("Text"):playcommand("Resize", {width=width, height=height, text=params.text, screenName=screenName})
+          self:GetChild("Text"):playcommand("Resize", {width=width, height=height, text=params.text})
         end,
 
         Def.Quad{
@@ -778,14 +926,6 @@ CreateOnlineHandler = function()
             self:diffuse(Color.Yellow)
           end,
           ResizeCommand=function(self, params)
-            local leftMargin = 8
-            if params.screenName == "ScreenSelectMusic" then
-              self:horizalign(left)
-              self:x(-params.width / 2 + leftMargin)
-            else
-              self:horizalign(center)
-              self:x(0)
-            end
             self:settext(params.text)
             DiffuseEmojis(self)
             -- We don't want text to be cut off.

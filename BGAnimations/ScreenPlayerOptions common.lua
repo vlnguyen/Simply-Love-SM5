@@ -1,5 +1,25 @@
 local af = Def.ActorFrame{}
 
+-- Append the lobby code to the header text (e.g. "Select Modifiers (ABCD)")
+-- whenever we're connected to an online lobby. Shared across ScreenPlayerOptions,
+-- ScreenPlayerOptions2, and ScreenPlayerOptions3.
+af[#af+1] = Def.Actor{
+	InitCommand=function(self) self:queuecommand("Refresh") end,
+	OnlineLobbyStateMessageCommand=function(self) self:queuecommand("Refresh") end,
+	OnlineLobbyLeftMessageCommand=function(self) self:queuecommand("Refresh") end,
+	DisconnectOnlineMessageCommand=function(self) self:queuecommand("Refresh") end,
+	RefreshCommand=function(self)
+		local handler = GetOnlineHandlerInstance()
+		local lobbyCode = handler and handler.lobbyCode
+		local screenName = SCREENMAN:GetTopScreen():GetName()
+		local headerText = THEME:GetString(screenName, "HeaderText")
+		if lobbyCode then
+			headerText = ("%s (%s)"):format(headerText, lobbyCode)
+		end
+		MESSAGEMAN:Broadcast("SetHeaderText", {Text=headerText})
+	end
+}
+
 -- this is broadcast from [OptionRow] TitleGainFocusCommand in metrics.ini
 -- we use it to color the active OptionRow's title appropriately by PlayerColor()
 af.OptionRowChangedMessageCommand=function(self, params)
