@@ -352,7 +352,7 @@ local DisplayLobbyState = function(data, actor)
       end
     end
   end
-  for i, player in ipairs(updatedData.players) do
+  for _, player in ipairs(updatedData.players) do
     local displayedScreen = player.screenName ~= "NoScreen" and player.screenName:gsub("Screen", "") or "Transitioning"
     local readyText = ""
     if screenName == Branch.GameplayScreen() and not updatedData.aux.allPlayersReady then
@@ -361,28 +361,24 @@ local DisplayLobbyState = function(data, actor)
 
     -- Only display the screen name of the players that are on a different
     -- screen than we are.
-    local playerAndScreen = i..'. '..player.profileName..readyText
+    local playerAndScreen = player.profileName..readyText
     if screenName ~= player.screenName then
       playerAndScreen = playerAndScreen.." - in "..displayedScreen
     end
 
     lines[#lines+1] = playerAndScreen
-    for scoreScreen in ivalues(scoreScreens) do
-      if player.screenName == scoreScreen then
-        -- Display the score and EX score.
-        local score = (player.score ~= nil and player.score) or 0
-        local exScore = (player.exScore ~= nil and player.exScore) or 0
+    if screenName ~= "ScreenSelectMusic" then
+      for scoreScreen in ivalues(scoreScreens) do
+        if player.screenName == scoreScreen then
+          -- Display the EX score only.
+          local exScore = (player.exScore ~= nil and player.exScore) or 0
+          local exScoreStr = string.format("%.2f", exScore).."%"
 
-        local scoreStr = string.format("%.2f", score).."%"
-        local exScoreStr = string.format("%.2f", exScore).."%"
-
-        lines[#lines+1] = "    "..scoreStr.." - "..exScoreStr.." EX"
-        break
+          lines[#lines+1] = "    "..exScoreStr.." EX"
+          break
+        end
       end
     end
-
-    -- Add a new line between players.
-    lines[#lines+1] = ""
   end
 
   if data.songInfo ~= nil then
@@ -580,6 +576,9 @@ CreateOnlineHandler = function()
             return
           end
 
+          -- We're connected and in a lobby, so show the panel.
+          self:GetChild("Display"):visible(true)
+
           -- Lock input while syncing arrival on key screens.
           if syncLockScreens[screenName] then
             isWaiting = true
@@ -730,7 +729,21 @@ CreateOnlineHandler = function()
 
           -- If we're on a different screen, we'll just retain the last position.
           if screenName == "ScreenSelectMusic" then
-            self:xy(LEFT, _screen.cy)
+            -- Cover the banner entirely: match its position and dimensions
+            -- exactly (see "ScreenSelectMusic overlay/banner.lua").
+            local bannerWidth = 418
+            local bannerHeight = 164
+            local bannerCenterX, bannerCenterY, bannerZoom
+            if IsUsingWideScreen() then
+              bannerCenterX, bannerCenterY, bannerZoom = _screen.cx - 170, 96, 0.7655
+            else
+              bannerCenterX, bannerCenterY, bannerZoom = _screen.cx - 166, 96, 0.75
+            end
+
+            width = bannerWidth * bannerZoom
+            height = bannerHeight * bannerZoom
+
+            self:xy(bannerCenterX, bannerCenterY)
             bg:zoomto(width, height)
           elseif screenName == "ScreenEvaluationStage" or screenName == Branch.GameplayScreen() then
             local p1Joined = GAMESTATE:IsSideJoined("PlayerNumber_P1")
@@ -748,7 +761,7 @@ CreateOnlineHandler = function()
             end
           end
 
-          self:GetChild("Text"):playcommand("Resize", {width=width, height=height, text=params.text})
+          self:GetChild("Text"):playcommand("Resize", {width=width, height=height, text=params.text, screenName=screenName})
         end,
 
         Def.Quad{
@@ -765,15 +778,23 @@ CreateOnlineHandler = function()
             self:diffuse(Color.Yellow)
           end,
           ResizeCommand=function(self, params)
+            local leftMargin = 8
+            if params.screenName == "ScreenSelectMusic" then
+              self:horizalign(left)
+              self:x(-params.width / 2 + leftMargin)
+            else
+              self:horizalign(center)
+              self:x(0)
+            end
             self:settext(params.text)
             DiffuseEmojis(self)
             -- We don't want text to be cut off.
-            -- Incrementally adjust the zoom while checking the width until it fits.
+            -- Incrementally adjust the zoom while checking the width and height until it fits.
             -- Not the prettiest solution but it works.
             for zoomVal=1.0, 0.1, -0.05 do
               self:zoom(zoomVal)
               self:settext(params.text)
-              if self:GetWidth() * zoomVal <= params.width then
+              if self:GetWidth() * zoomVal <= params.width and self:GetHeight() * zoomVal <= params.height then
                 break
               end
             end
