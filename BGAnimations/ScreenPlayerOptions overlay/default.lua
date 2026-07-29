@@ -294,6 +294,9 @@ LoadActor("./OptionRowPreviews/HoldJudgment.lua", t)
 LoadActor("./OptionRowPreviews/MusicRate.lua", t)
 
 -- some functionality needed in both PlayerOptions, PlayerOptions2, and PlayerOptions3
+-- (this also includes appending the lobby code to the header text; see
+-- "ScreenPlayerOptions common.lua", since ScreenPlayerOptions2 and
+-- ScreenPlayerOptions3 load that file directly as their own overlay)
 t[#t+1] = LoadActor(THEME:GetPathB("ScreenPlayerOptions", "common"))
 
 
