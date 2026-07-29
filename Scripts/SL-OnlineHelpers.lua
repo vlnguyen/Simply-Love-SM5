@@ -637,9 +637,17 @@ CreateOnlineHandler = function()
           end
 
           if screenName == Branch.GameplayScreen() then
+            -- In solo versus (versus style, and we're the only two players in
+            -- the lobby -- see isSoloVersus in DisplayLobbyState), auto-ready
+            -- both sides so gameplay starts immediately instead of waiting on
+            -- a manual Start press from each player.
+            local stylename = GAMESTATE:GetCurrentStyle():GetName()
+            local lobbyPlayers = self.latestLobbyState and self.latestLobbyState.players
+            local isSoloVersus = stylename == "versus" and lobbyPlayers and #lobbyPlayers == 2
+
             for player in ivalues(GAMESTATE:GetEnabledPlayers()) do
               local pn = ToEnumShortString(player)
-              readyState[pn] = false
+              readyState[pn] = isSoloVersus or false
             end
             -- Input callbacks get cleared out when we transition screens, so we don't need to worry about explicitly removing it.
             SCREENMAN:GetTopScreen():AddInputCallback(InputHandler)
