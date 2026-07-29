@@ -87,6 +87,16 @@ for player in ivalues(Players) do
         if SL[ToEnumShortString(player)].ActiveModifiers.NPSGraphAtTop or ThemePrefs.Get("EnableTournamentMode") then
             local pn = ToEnumShortString(player)
             local IsEX = SL[pn].ActiveModifiers.ShowExScore
+            local otherPlayer = OtherPlayer[player]
+
+            -- Mirror "ScreenGameplay overlay/WhoIsCurrentlyWinning.lua": dim
+            -- whichever player is currently behind. Only bother comparing if
+            -- both players are using the same scoring mechanism.
+            local scoringMechanismsMatch = SL["P1"].ActiveModifiers.ShowExScore == SL["P2"].ActiveModifiers.ShowExScore
+            local myScore = 0
+            local theirScore = 0
+            local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
+            local other_pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(otherPlayer)
 
             af[#af+1] = LoadFont("Wendy/_wendy monospace numbers")..{
                 Text="0.00",
@@ -106,22 +116,49 @@ for player in ivalues(Players) do
                     end
                 end,
                 JudgmentMessageCommand=function(self, params)
-                    if params.Player ~= player then return end
-                    self:queuecommand("RedrawScore")
+                    if params.Player == player then
+                        self:queuecommand("RedrawScore")
+                    end
+
+                    if not IsEX and scoringMechanismsMatch and (params.Player == player or params.Player == otherPlayer) then
+                        -- calculate the percentage DP manually rather than use GetPercentDancePoints.
+                        -- That function rounds to the nearest .01%, which is inaccurate on long songs.
+                        if params.Player == player then
+                            myScore = pss:GetActualDancePoints() / pss:GetPossibleDancePoints()
+                        else
+                            theirScore = other_pss:GetActualDancePoints() / other_pss:GetPossibleDancePoints()
+                        end
+                        self:queuecommand("RedrawWinning")
+                    end
                 end,
                 RedrawScoreCommand=function(self)
                     if not IsEX then
-                        local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
                         local dance_points = pss:GetPercentDancePoints()
                         local percent = FormatPercentScore( dance_points ):sub(1,-2)
                         self:settext(percent)
                     end
                 end,
                 ExCountsChangedMessageCommand=function(self, params)
-                    if params.Player ~= player then return end
-            
+                    if params.Player ~= player and params.Player ~= otherPlayer then return end
+
                     if IsEX then
-                        self:settext(("%.02f"):format(params.ExScore))
+                        if params.Player == player then
+                            self:settext(("%.02f"):format(params.ExScore))
+                            myScore = params.ExScore
+                        else
+                            theirScore = params.ExScore
+                        end
+
+                        if scoringMechanismsMatch then
+                            self:queuecommand("RedrawWinning")
+                        end
+                    end
+                end,
+                RedrawWinningCommand=function(self)
+                    if myScore >= theirScore then
+                        self:diffusealpha(1)
+                    else
+                        self:diffusealpha(0.65)
                     end
                 end,
             }
