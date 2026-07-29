@@ -344,8 +344,6 @@ local DisplayLobbyState = function(data, actor)
 
       if screenName == Branch.GameplayScreen() then
         SCREENMAN:GetTopScreen():PauseGame(false)
-        -- Hide the sync/scoreboard panel once gameplay actually starts.
-        actor:GetChild("Display"):visible(false)
       end
     else
       lines[#lines+1] = "Waiting for players to sync screens...\n"
@@ -581,11 +579,6 @@ CreateOnlineHandler = function()
             MESSAGEMAN:Broadcast("DisconnectOnline")
             return
           end
-
-          -- The panel gets hidden once gameplay actually starts; bring it back
-          -- whenever we land on a new screen so syncing/scores are visible again.
-          -- ScreenEvaluationStage never shows it.
-          self:GetChild("Display"):visible(screenName ~= "ScreenEvaluationStage")
 
           -- Lock input while syncing arrival on key screens.
           if syncLockScreens[screenName] then
