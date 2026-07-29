@@ -382,9 +382,6 @@ local DisplayLobbyState = function(data, actor)
         break
       end
     end
-
-    -- Add a new line between players.
-    lines[#lines+1] = ""
   end
 
   if data.songInfo ~= nil then
@@ -738,8 +735,21 @@ CreateOnlineHandler = function()
 
           -- If we're on a different screen, we'll just retain the last position.
           if screenName == "ScreenSelectMusic" then
-            self:xy(LEFT, _screen.cy)
-            bg:zoomto(width, height)
+            -- Line our top-left corner up with the banner's top-left corner
+            -- (see "ScreenSelectMusic overlay/banner.lua").
+            local bannerWidth = 418
+            local bannerHeight = 164
+            local bannerCenterX, bannerCenterY, bannerZoom
+            if IsUsingWideScreen() then
+              bannerCenterX, bannerCenterY, bannerZoom = _screen.cx - 170, 96, 0.7655
+            else
+              bannerCenterX, bannerCenterY, bannerZoom = _screen.cx - 166, 96, 0.75
+            end
+            local bannerLeftEdge = bannerCenterX - (bannerWidth / 2) * bannerZoom
+            local bannerHeightScaled = bannerHeight * bannerZoom
+
+            self:xy(bannerLeftEdge + width / 2, bannerCenterY)
+            bg:zoomto(width, bannerHeightScaled)
           elseif screenName == "ScreenEvaluationStage" or screenName == Branch.GameplayScreen() then
             local p1Joined = GAMESTATE:IsSideJoined("PlayerNumber_P1")
             local p2Joined = GAMESTATE:IsSideJoined("PlayerNumber_P2")
