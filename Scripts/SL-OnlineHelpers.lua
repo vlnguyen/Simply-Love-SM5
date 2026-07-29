@@ -354,7 +354,7 @@ local DisplayLobbyState = function(data, actor)
       end
     end
   end
-  for i, player in ipairs(updatedData.players) do
+  for _, player in ipairs(updatedData.players) do
     local displayedScreen = player.screenName ~= "NoScreen" and player.screenName:gsub("Screen", "") or "Transitioning"
     local readyText = ""
     if screenName == Branch.GameplayScreen() and not updatedData.aux.allPlayersReady then
@@ -363,24 +363,14 @@ local DisplayLobbyState = function(data, actor)
 
     -- Only display the screen name of the players that are on a different
     -- screen than we are.
-    local playerAndScreen = i..'. '..player.profileName..readyText
+    local playerAndScreen = player.profileName..readyText
     if screenName ~= player.screenName then
       playerAndScreen = playerAndScreen.." - in "..displayedScreen
     end
 
     lines[#lines+1] = playerAndScreen
-    for scoreScreen in ivalues(scoreScreens) do
-      if player.screenName == scoreScreen then
-        -- Display the score and EX score.
-        local score = (player.score ~= nil and player.score) or 0
-        local exScore = (player.exScore ~= nil and player.exScore) or 0
-
-        local scoreStr = string.format("%.2f", score).."%"
-        local exScoreStr = string.format("%.2f", exScore).."%"
-
-        lines[#lines+1] = "    "..scoreStr.." - "..exScoreStr.." EX"
-        break
-      end
+    if screenName == Branch.GameplayScreen() then
+      lines[#lines+1] = ""
     end
   end
 
@@ -532,7 +522,7 @@ CreateOnlineHandler = function()
                 self.inLobby = false
                 self.lobbyCode = nil
                 self.errorMsg = nil
-                self:GetChild("Display"):visible(true)
+                -- self:GetChild("Display"):visible(true)
               elseif msgType == "Message" then
                 local response = JsonDecode(msg.data)
                 HandleResponse(response, self)
@@ -766,7 +756,7 @@ CreateOnlineHandler = function()
             end
           end
 
-          self:GetChild("Text"):playcommand("Resize", {width=width, height=height, text=params.text})
+          self:GetChild("Text"):playcommand("Resize", {width=width, height=height, text=params.text, screenName=screenName})
         end,
 
         Def.Quad{
@@ -783,6 +773,14 @@ CreateOnlineHandler = function()
             self:diffuse(Color.Yellow)
           end,
           ResizeCommand=function(self, params)
+            local leftMargin = 8
+            if params.screenName == "ScreenSelectMusic" then
+              self:horizalign(left)
+              self:x(-params.width / 2 + leftMargin)
+            else
+              self:horizalign(center)
+              self:x(0)
+            end
             self:settext(params.text)
             DiffuseEmojis(self)
             -- We don't want text to be cut off.
