@@ -2,30 +2,26 @@ local Players = GAMESTATE:GetHumanPlayers()
 local IsUltraWide = (GetScreenAspectRatio() > 21/9)
 local FilterAlpha = BackgroundFilterValues()
 
+-- This pane's whole purpose is a versus-specific layout (split-screen
+-- background, "other side" positioning, etc.) that the normal single-player
+-- StepStatsPane doesn't support -- so which layout renders must depend only
+-- on the local style/player count, never on the lobby's total player count.
+-- UseLobbyStandings (below) only affects the score-text's own visibility and
+-- dimming math further down, not whether this pane exists at all.
 local OnlineHandler = GetOnlineHandlerInstance()
--- During a Tournament Mode (EX scoring) event while connected to an online
--- lobby, this pane can apply even in single style, since there might only be
--- one local player racing remote opponents. Solo versus still falls back to
--- the original versus-only behavior, since the "whole lobby" there is just
--- the two local players anyway.
 local UseLobbyStandings = OnlineHandler and OnlineHandler.inLobby and IsTournamentModeEX() and not IsSoloVersus()
 
 local ShouldDisplayStatsForPlayer = function(player)
     local pn = ToEnumShortString(player)
     return (SL[pn].ActiveModifiers.DataVisualizations == "Step Statistics" or
-            (ThemePrefs.Get("EnableTournamentMode") and ThemePrefs.Get("StepStats") == "Show") or
-            UseLobbyStandings)
+            (ThemePrefs.Get("EnableTournamentMode") and ThemePrefs.Get("StepStats") == "Show"))
 end
 
 local ShouldDisplayStats = function()
-    -- Outside of that specific lobby scenario, this is strictly a versus-mode
-    -- feature (a second step-stats readout for the versus layout, since the
-    -- normal single-player StepStatsPane doesn't support versus).
-    if not UseLobbyStandings and GAMESTATE:GetCurrentStyle():GetName() ~= "versus" then
+    -- Only use this in Versus + Widescreen.
+    if GAMESTATE:GetCurrentStyle():GetName() ~= "versus" or not IsUsingWideScreen() then
         return false
     end
-
-    if not IsUsingWideScreen() then return false end
 
     -- Ultrawide versus is already supported natively.
     if IsUltraWide then return false end
@@ -72,7 +68,7 @@ if ShouldDisplayStats() then
 end
 
 for player in ivalues(Players) do
-    if ShouldDisplayStatsForPlayer(player) and (#Players > 1 or UseLobbyStandings) then
+    if ShouldDisplayStatsForPlayer(player) and GAMESTATE:GetNumSidesJoined() > 1 then
         -- No need to reimplement the wheel here. Just use the existing actor and modify it for our use case.
         local judgments = LoadActor("../PerPlayer/StepStatistics/TapNoteJudgments.lua", {player, false})
         judgments.InitCommand = function(self)    

@@ -9,7 +9,13 @@ local NoteFieldIsCentered = (GetNotefieldX(player) == _screen.cx)
 
 local stylename = GAMESTATE:GetCurrentStyle():GetName()
 
-if SL[pn].ActiveModifiers.DataVisualizations ~= "Step Statistics" then return end
+-- Tournament Mode removes the DataVisualizations option row entirely (see
+-- metrics.ini), so a player who never manually picked "Step Statistics"
+-- before Tournament Mode kicked in has no way to satisfy this otherwise --
+-- StepStats=="Show" (the default) should force it on regardless, matching
+-- the same bypass VersusStepStatistics.lua already uses.
+local ForceStepStats = ThemePrefs.Get("EnableTournamentMode") and ThemePrefs.Get("StepStats") == "Show"
+if SL[pn].ActiveModifiers.DataVisualizations ~= "Step Statistics" and not ForceStepStats then return end
 
 if (not IsUltraWide and stylename == "versus")
 	or (not ThemePrefs.Get("EnableTournamentMode") and
