@@ -224,27 +224,33 @@ local OrderPlayers = function(data, localScreenName)
   -- incorrectly reporting all players as synchronized.
   local firstScreen = localScreenName
   -- Process the scoreScreens first so we can sort the players by score.
-  for player in ivalues(data.players) do
-    if firstScreen == nil then
-      firstScreen = player.screenName
-    end
+  -- pairs(), not ivalues()/#: the server's players array can have nil gaps
+  -- (e.g. a disconnected slot), and # is undefined on a table with holes, so
+  -- ivalues() can silently stop early and skip real entries. pairs() visits
+  -- every entry that's actually present.
+  for _, player in pairs(data.players) do
+    if player then
+      if firstScreen == nil then
+        firstScreen = player.screenName
+      end
 
-    if player.screenName ~= firstScreen then
-      updatedData.aux.allInSameScreen = false
-    end
+      if player.screenName ~= firstScreen then
+        updatedData.aux.allInSameScreen = false
+      end
 
-    if player.screenName == Branch.GameplayScreen() then
-      updatedData.aux.anyInGameplay = true
-    end
+      if player.screenName == Branch.GameplayScreen() then
+        updatedData.aux.anyInGameplay = true
+      end
 
-    if not player.ready then
-      updatedData.aux.allPlayersReady = false
-    end
+      if not player.ready then
+        updatedData.aux.allPlayersReady = false
+      end
 
-    for screen in ivalues(scoreScreens) do
-      if player.screenName == screen then
-        updatedData.players[#updatedData.players+1] = player
-        break
+      for screen in ivalues(scoreScreens) do
+        if player.screenName == screen then
+          updatedData.players[#updatedData.players+1] = player
+          break
+        end
       end
     end
   end
@@ -263,33 +269,35 @@ local OrderPlayers = function(data, localScreenName)
   end)
 
   -- Then add all the other players in other screens below.
-  for player in ivalues(data.players) do
-    if firstScreen == nil then
-      firstScreen = player.screenName
-    end
-
-    if player.screenName ~= firstScreen then
-      updatedData.aux.allInSameScreen = false
-    end
-
-    if player.screenName == Branch.GameplayScreen() then
-      updatedData.aux.anyInGameplay = true
-    end
-
-    if not player.ready then
-      updatedData.aux.allPlayersReady = false
-    end
-
-    local inScoreScreen = false
-    for screen in ivalues(scoreScreens) do
-      if player.screenName == screen then
-        inScoreScreen = true
-        break
+  for _, player in pairs(data.players) do
+    if player then
+      if firstScreen == nil then
+        firstScreen = player.screenName
       end
-    end
 
-    if not inScoreScreen then
-      updatedData.players[#updatedData.players+1] = player
+      if player.screenName ~= firstScreen then
+        updatedData.aux.allInSameScreen = false
+      end
+
+      if player.screenName == Branch.GameplayScreen() then
+        updatedData.aux.anyInGameplay = true
+      end
+
+      if not player.ready then
+        updatedData.aux.allPlayersReady = false
+      end
+
+      local inScoreScreen = false
+      for screen in ivalues(scoreScreens) do
+        if player.screenName == screen then
+          inScoreScreen = true
+          break
+        end
+      end
+
+      if not inScoreScreen then
+        updatedData.players[#updatedData.players+1] = player
+      end
     end
   end
 
@@ -365,8 +373,7 @@ local DisplayLobbyState = function(data, actor)
   -- hide the overlay entirely -- there's nothing another machine needs to
   -- sync with us on. As soon as a third player (from another machine) joins,
   -- the normal display logic below takes back over.
-  local stylename = GAMESTATE:GetCurrentStyle():GetName()
-  local isSoloVersus = stylename == "versus" and #updatedData.players == 2
+  local isSoloVersus = IsSoloVersus()
   -- None of the Player Options screens show the overlay.
   local hideOverlay = noOverlayScreens[screenName] or false
   if isSoloVersus then
@@ -513,6 +520,98 @@ GetGameModeDisplayText = function()
   return THEME:GetString("ScreenSelectPlayMode", SL.Global.GameMode)
 end
 
+-- Returns true if we're in an online lobby, in versus style, and the only two
+-- players in the lobby are our own two local sides (i.e. nobody else from
+-- another machine has joined). Callers should fall back to local-only
+-- behavior in that case -- there's no one else to compare/sync against.
+IsSoloVersus = function()
+  local handler = GetOnlineHandlerInstance()
+  if not (handler and handler.inLobby and handler.latestLobbyState and handler.latestLobbyState.players) then
+    return false
+  end
+  if GAMESTATE:GetCurrentStyle():GetName() ~= "versus" then
+    return false
+  end
+
+  -- Count via pairs(), not # -- see the comment in GetBestLobbyScore about
+  -- why # is unreliable on this array (it can contain nil gaps).
+  local count = 0
+  for _, player in pairs(handler.latestLobbyState.players) do
+    if player then
+      count = count + 1
+    end
+  end
+  return count == 2
+end
+
+-- Returns the best known score (EX or dance points %, per useExScore) across
+-- every player currently in the lobby, or nil if we're not in a lobby at all.
+-- Used so that "who's winning" comparisons can consider the whole lobby
+-- instead of just the local player(s).
+GetBestLobbyScore = function(useExScore)
+  local handler = GetOnlineHandlerInstance()
+  if not (handler and handler.inLobby and handler.latestLobbyState and handler.latestLobbyState.players) then
+    return nil
+  end
+
+  -- Use pairs(), not ivalues()/#, since the server's players array can have
+  -- nil gaps (e.g. a disconnected slot) -- the # operator's behavior on a
+  -- table with holes is undefined, so ivalues() can unpredictably see
+  -- anywhere from zero to all of the real entries depending on where the gap
+  -- falls. pairs() correctly visits every entry that's actually present.
+  local best = nil
+  for _, player in pairs(handler.latestLobbyState.players) do
+    if player then
+      local value = useExScore and player.exScore or player.score
+      if value ~= nil and (best == nil or value > best) then
+        best = value
+      end
+    end
+  end
+  return best
+end
+
+-- Returns this local player's own score (EX or dance points %, per useExScore)
+-- as last reported to the lobby, or nil if we're not in a lobby or haven't
+-- synced yet. Matched by profile name against the lobby roster.
+--
+-- Comparisons against GetBestLobbyScore should always pull "my score" from
+-- here too, rather than from local judgment tracking -- mixing a fresh local
+-- value against a lobby-synced "best" (which may include a stale, differently
+-- timed copy of yourself) can make you appear to be losing to your own past
+-- self even when nobody has actually passed you.
+GetLobbyScoreForPlayer = function(player, useExScore)
+  local handler = GetOnlineHandlerInstance()
+  if not (handler and handler.inLobby and handler.latestLobbyState and handler.latestLobbyState.players) then
+    return nil
+  end
+
+  local profileName = "NoName"
+  if PROFILEMAN:IsPersistentProfile(player) and PROFILEMAN:GetProfile(player) then
+    profileName = PROFILEMAN:GetProfile(player):GetDisplayName()
+  end
+
+  -- See the comment in GetBestLobbyScore about why pairs() is used here
+  -- instead of ivalues()/#.
+  for _, entry in pairs(handler.latestLobbyState.players) do
+    if entry and entry.profileName == profileName then
+      local value = useExScore and entry.exScore or entry.score
+      if value ~= nil then
+        return value
+      end
+    end
+  end
+  return nil
+end
+
+-- Tournament Mode with EX scoring forces every player's ShowExScore to true
+-- (see SaveSelections in SL-PlayerOptions.lua), so callers gated on this can
+-- always treat scores as EX scores without branching on each player's own
+-- ShowExScore preference or worrying about mismatched scoring mechanisms.
+IsTournamentModeEX = function()
+  return ThemePrefs.Get("EnableTournamentMode") and ThemePrefs.Get("ScoringSystem") == "EX"
+end
+
 CreateOnlineHandler = function() 
   if onlineHandler == nil then
     onlineHandler = Def.ActorFrame{
@@ -637,17 +736,14 @@ CreateOnlineHandler = function()
           end
 
           if screenName == Branch.GameplayScreen() then
-            -- In solo versus (versus style, and we're the only two players in
-            -- the lobby -- see isSoloVersus in DisplayLobbyState), auto-ready
-            -- both sides so gameplay starts immediately instead of waiting on
-            -- a manual Start press from each player.
-            local stylename = GAMESTATE:GetCurrentStyle():GetName()
-            local lobbyPlayers = self.latestLobbyState and self.latestLobbyState.players
-            local isSoloVersus = stylename == "versus" and lobbyPlayers and #lobbyPlayers == 2
+            -- In solo versus (see IsSoloVersus()), auto-ready both sides so
+            -- gameplay starts immediately instead of waiting on a manual
+            -- Start press from each player.
+            local isSoloVersus = IsSoloVersus()
 
             for player in ivalues(GAMESTATE:GetEnabledPlayers()) do
               local pn = ToEnumShortString(player)
-              readyState[pn] = isSoloVersus or false
+              readyState[pn] = isSoloVersus
             end
             -- Input callbacks get cleared out when we transition screens, so we don't need to worry about explicitly removing it.
             SCREENMAN:GetTopScreen():AddInputCallback(InputHandler)
