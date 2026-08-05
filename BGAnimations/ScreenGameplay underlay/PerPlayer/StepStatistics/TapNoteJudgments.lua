@@ -10,7 +10,11 @@ local StepsOrTrail = (GAMESTATE:IsCourseMode() and GAMESTATE:GetCurrentTrail(pla
 local total_tapnotes = StepsOrTrail:GetRadarValues(player):GetValue( "RadarCategory_Notes" )
 
 -- Only add this in ITG mode.
-local ShowFaPlusWindow = SL[pn].ActiveModifiers.ShowFaPlusWindow and SL.Global.GameMode=="ITG"
+-- Always show it in Tournament Mode when scoring by EX, regardless of the
+-- player's own ShowFaPlusWindow preference (that toggle only controls the
+-- in-gameplay flash window; step stats should still reflect W0 counts).
+local ForceFaPlusWindow = ThemePrefs.Get("EnableTournamentMode") and ThemePrefs.Get("ScoringSystem") == "EX"
+local ShowFaPlusWindow = (SL[pn].ActiveModifiers.ShowFaPlusWindow or ForceFaPlusWindow) and SL.Global.GameMode=="ITG"
 
 -- determine how many digits are needed to express the number of notes in base-10
 local digits = (math.floor(math.log10(total_tapnotes)) + 1)

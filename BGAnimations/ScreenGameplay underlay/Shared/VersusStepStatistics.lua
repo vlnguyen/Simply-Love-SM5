@@ -2,10 +2,19 @@ local Players = GAMESTATE:GetHumanPlayers()
 local IsUltraWide = (GetScreenAspectRatio() > 21/9)
 local FilterAlpha = BackgroundFilterValues()
 
+-- This pane's whole purpose is a versus-specific layout (split-screen
+-- background, "other side" positioning, etc.) that the normal single-player
+-- StepStatsPane doesn't support -- so which layout renders must depend only
+-- on the local style/player count, never on the lobby's total player count.
+-- UseLobbyStandings (below) only affects the score-text's own visibility and
+-- dimming math further down, not whether this pane exists at all.
+local OnlineHandler = GetOnlineHandlerInstance()
+local UseLobbyStandings = OnlineHandler and OnlineHandler.inLobby and IsTournamentModeEX() and not IsSoloVersus()
+
 local ShouldDisplayStatsForPlayer = function(player)
     local pn = ToEnumShortString(player)
     return (SL[pn].ActiveModifiers.DataVisualizations == "Step Statistics" or
-            ThemePrefs.Get("EnableTournamentMode") and ThemePrefs.Get("StepStats") == "Show")
+            (ThemePrefs.Get("EnableTournamentMode") and ThemePrefs.Get("StepStats") == "Show"))
 end
 
 local ShouldDisplayStats = function()
@@ -59,7 +68,7 @@ if ShouldDisplayStats() then
 end
 
 for player in ivalues(Players) do
-    if ShouldDisplayStatsForPlayer(player) and #Players > 1 then
+    if ShouldDisplayStatsForPlayer(player) and GAMESTATE:GetNumSidesJoined() > 1 then
         -- No need to reimplement the wheel here. Just use the existing actor and modify it for our use case.
         local judgments = LoadActor("../PerPlayer/StepStatistics/TapNoteJudgments.lua", {player, false})
         judgments.InitCommand = function(self)    
@@ -83,10 +92,20 @@ for player in ivalues(Players) do
 
         af[#af+1] = judgments
 
-        -- Add a score to Step Stats if it's hidden by the NPS graph or we're in Tournament Mode.
-        if SL[ToEnumShortString(player)].ActiveModifiers.NPSGraphAtTop or ThemePrefs.Get("EnableTournamentMode") then
+        -- Add a score to Step Stats if it's hidden by the NPS graph, we're in
+        -- Tournament Mode, or we're using lobby-wide standings (there might be
+        -- a remote opponent to compare against with no local versus partner).
+        if SL[ToEnumShortString(player)].ActiveModifiers.NPSGraphAtTop or ThemePrefs.Get("EnableTournamentMode") or UseLobbyStandings then
             local pn = ToEnumShortString(player)
             local IsEX = SL[pn].ActiveModifiers.ShowExScore
+            local otherPlayer = OtherPlayer[player]
+
+            -- Mirror "ScreenGameplay overlay/WhoIsCurrentlyWinning.lua": dim
+            -- whichever player is currently behind.
+            local myScore = 0
+            local theirScore = 0
+            local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
+            local other_pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(otherPlayer)
 
             af[#af+1] = LoadFont("Wendy/_wendy monospace numbers")..{
                 Text="0.00",
@@ -106,22 +125,76 @@ for player in ivalues(Players) do
                     end
                 end,
                 JudgmentMessageCommand=function(self, params)
-                    if params.Player ~= player then return end
-                    self:queuecommand("RedrawScore")
+                    if params.Player == player then
+                        self:queuecommand("RedrawScore")
+                    end
+
+                    if not IsEX and (params.Player == player or params.Player == otherPlayer) then
+                        -- calculate the percentage DP manually rather than use GetPercentDancePoints.
+                        -- That function rounds to the nearest .01%, which is inaccurate on long songs.
+                        if params.Player == player then
+                            myScore = pss:GetActualDancePoints() / pss:GetPossibleDancePoints()
+                        else
+                            theirScore = other_pss:GetActualDancePoints() / other_pss:GetPossibleDancePoints()
+                        end
+                        self:queuecommand("RedrawWinning")
+                    end
                 end,
                 RedrawScoreCommand=function(self)
                     if not IsEX then
-                        local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
                         local dance_points = pss:GetPercentDancePoints()
                         local percent = FormatPercentScore( dance_points ):sub(1,-2)
                         self:settext(percent)
                     end
                 end,
                 ExCountsChangedMessageCommand=function(self, params)
-                    if params.Player ~= player then return end
-            
+                    if params.Player ~= player and params.Player ~= otherPlayer then return end
+
                     if IsEX then
-                        self:settext(("%.02f"):format(params.ExScore))
+                        if params.Player == player then
+                            self:settext(("%.02f"):format(params.ExScore))
+                            myScore = params.ExScore
+                        else
+                            theirScore = params.ExScore
+                        end
+                        self:queuecommand("RedrawWinning")
+                    end
+                end,
+                OnlineLobbyStateMessageCommand=function(self)
+                    -- Remote players' scores update via the lobby server, not
+                    -- local Judgment/ExCountsChanged messages, so re-check on
+                    -- every lobby update too.
+                    self:queuecommand("RedrawWinning")
+                end,
+                RedrawWinningCommand=function(self)
+                    -- Check fresh each time (rather than the load-time
+                    -- snapshot) so a mid-song disconnect gracefully falls back
+                    -- to local-only comparison.
+                    local handler = GetOnlineHandlerInstance()
+                    local useLobbyStandingsNow = handler and handler.inLobby and IsTournamentModeEX() and not IsSoloVersus()
+
+                    if useLobbyStandingsNow then
+                        -- Pull "my score" from the lobby roster too (not local
+                        -- judgment tracking), so both sides of the comparison
+                        -- come from the same synced snapshot. Always EX score
+                        -- in this mode.
+                        local best = GetBestLobbyScore(true)
+                        local myLobbyScore = GetLobbyScoreForPlayer(player, true)
+                        self:diffusealpha((not best or not myLobbyScore or myLobbyScore >= best) and 1 or 0.65)
+                        return
+                    end
+
+                    -- Only compare locally if both players are using the same
+                    -- scoring mechanism.
+                    if SL["P1"].ActiveModifiers.ShowExScore ~= SL["P2"].ActiveModifiers.ShowExScore then
+                        self:diffusealpha(1)
+                        return
+                    end
+
+                    if myScore >= theirScore then
+                        self:diffusealpha(1)
+                    else
+                        self:diffusealpha(0.65)
                     end
                 end,
             }
