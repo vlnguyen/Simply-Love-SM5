@@ -34,7 +34,7 @@ end
 -- It is important to display the current theme's name to help users quickly assess what version of SL
 -- they are using right now.  THEME:GetCurThemeName() provides the name of the theme folder from the
 -- filesystem, so we'll show that.  It is guaranteed to be unique and users are likely to recognize it.
-local sl_name = THEME:GetCurThemeName()
+local sl_name = THEME:GetCurThemeName() .. " for Project Storm 2026"
 
 -- -----------------------------------------------------------------------
 -- ProductFamily() returns "StepMania"
